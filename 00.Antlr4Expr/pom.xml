@@ -127,6 +127,7 @@
                 </executions>
                 <configuration>
                     <visitor>true</visitor>
+                    <listener>false</listener>
                     <outputDirectory>${project.basedir}/target/generated-sources/antlr4</outputDirectory>
                 </configuration>
             </plugin>
