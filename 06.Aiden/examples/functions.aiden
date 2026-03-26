@@ -1,0 +1,17 @@
+# Simple expression-body functions
+let fn add x y = x + y;
+let fn square x = x * x;
+
+# Block-body function with conditional
+let fn abs x = {
+    if (x >= 0) { return x; }
+    else { return -x; }
+}
+
+let r1 = add(4, 6);
+let r2 = square(5);
+let r3 = abs(-9);
+
+print r1;
+print r2;
+print r3;

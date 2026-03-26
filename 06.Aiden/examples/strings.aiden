@@ -1,0 +1,9 @@
+# String concatenation
+let fn greet name = "Hello, " + name;
+
+let msg = greet("Aiden");
+print msg;
+
+let a = "foo";
+let b = "bar";
+print a + b;

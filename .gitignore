@@ -28,3 +28,5 @@ target/
 *.bak
 
 .idea/
+.claude/
+.antlr/

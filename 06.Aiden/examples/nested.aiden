@@ -1,0 +1,9 @@
+# Nested function captures outer parameter
+let fn makeAdder base = {
+    let fn adder x = base + x;
+    return adder;
+}
+
+let add5 = makeAdder(5);
+let result = add5(3);
+print result;

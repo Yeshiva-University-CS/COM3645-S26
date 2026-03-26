@@ -1,0 +1,15 @@
+# Boolean logic and comparisons
+let t = true;
+let f = false;
+
+let both   = t and f;
+let either = t or f;
+let inv    = !t;
+
+print both;
+print either;
+print inv;
+
+let x = 7;
+let inRange = x > 0 and x < 10;
+print inRange;

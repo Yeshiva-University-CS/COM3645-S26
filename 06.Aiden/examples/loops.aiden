@@ -1,0 +1,26 @@
+# repeat: fixed number of iterations, no loop vars
+repeat 3 times { print "hello"; }
+
+# repeat with a loop var
+repeat 4 times (i = 1) {
+    print i;
+    i = i + 1;
+}
+
+# until: loop var initialized, condition references it
+loop (count = 1) {
+    print count;
+    count = count + 1;
+} until (count > 3);
+
+# until: multiple loop vars
+loop (a = 0, b = 10) {
+    print a + b;
+    a = a + 1;
+} until (a > 3);
+
+# until: uninitialized loop var (defaults to none)
+loop (x) { print "uninitialized"; } until (true);
+
+# until: simple body, no loop vars
+loop { print "one shot"; } until (true);

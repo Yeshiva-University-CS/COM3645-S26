@@ -1,0 +1,142 @@
+grammar Aiden;
+
+@header {
+    package antlr4;
+    import edu.yu.compilers.intermediate.symbols.SymTableEntry;
+    import edu.yu.compilers.intermediate.types.Typespec;
+}
+
+program
+    locals [SymTableEntry entry = null]
+    : declaration* # programStart;
+
+declaration
+    : funcDecl  # declFunction
+    | letDecl   # declLet
+    | statement # declStatement
+    ;
+
+funcDecl
+    locals [SymTableEntry entry = null]
+    : 'let' 'fn' name=IDENTIFIER (params+=IDENTIFIER)* '=' functionBody # functionDeclaration;
+
+letDecl
+    locals [SymTableEntry entry = null]
+    : 'let' id=IDENTIFIER '=' init=expression ';' # letDeclaration;
+
+functionBody
+    : expression ';'   # expressionBody
+    | block            # blockBody
+    ;
+
+varDecl 
+    locals [SymTableEntry entry = null]
+    : 'var' id=IDENTIFIER ('=' init=expression)? ';' # variableDeclaration;
+
+// Statements
+
+statement
+    : exprStmt     # stmtExpression
+    | printStmt    # stmtPrint
+    | ifStmt       # stmtIf
+    | returnStmt   # stmtReturn
+    | untilStmt    # stmtUntil
+    | repeatStmt   # stmtRepeat
+    | block        # stmtBlock
+    | emptyStmt    # stmtEmpty
+    ;
+
+exprStmt : expression ';' # expressionStatement;
+
+printStmt : 'print' value=expression ';' # printStatement;
+
+ifStmt : 'if' '(' condition=expression ')' thenBranch=statement
+        ('else' elseBranch=statement)? # ifStatement;
+
+returnStmt : 'return' value=expression? ';' # returnStatement;
+
+untilStmt  : 'loop' loopVarDecls? body=block 'until' '(' condition=expression ')' ';' # untilStatement;
+
+repeatStmt : 'repeat' count=expression 'times' loopVarDecls? body=block # repeatStatement;
+
+loopVarDecls : '(' vars+=loopVar (',' vars+=loopVar)* ')';
+
+loopVar
+    locals [SymTableEntry entry = null]
+    : id=IDENTIFIER ('=' init=expression)? # loopVarItem;
+
+emptyStmt : ';' # emptyStatement;
+
+block : '{' (declarations+=declaration)* '}' # blockStatement;
+
+// Expressions
+
+expression
+    locals [Typespec type = null, Object value = null]    
+    : assignment # expr;
+
+assignment     
+    locals [Typespec type = null, Object value = null, SymTableEntry entry = null]
+    : id=IDENTIFIER '=' rhs=assignment # assignmentExpr
+    | logic_or                         # assignmentOr
+    ;
+
+logic_or     
+    locals [Typespec type = null, Object value = null]     
+    : left=logic_and (op+='or' right+=logic_and)* # logicalOr;
+
+logic_and  
+    locals [Typespec type = null, Object value = null]       
+    : left=equality (op+='and' right+=equality)* # logicalAnd;
+
+equality     
+    locals [Typespec type = null, Object value = null]     
+    : left=comparison (op+=('!=' | '==') right+=comparison)* # equalityExpr;
+
+comparison 
+    locals [Typespec type = null, Object value = null]       
+    : left=term (op+=('>' | '>=' | '<' | '<=') right+=term)* # comparisonExpr;
+
+term       
+    locals [Typespec type = null, Object value = null]       
+    : left=factor (op+=('+' | '-') right+=factor)* # termExpr;
+
+factor     
+    locals [Typespec type = null, Object value = null]       
+    : left=unary (op+=('*' | '/') right+=unary)* # factorExpr;
+
+unary      
+    locals [Typespec type = null, Object value = null]       
+    : op=('!' | '-') right=unary # unaryExpr
+    | call                       # unaryCall
+    ;
+
+call       
+    locals [Typespec type = null, Object value = null, SymTableEntry entry = null]  
+    : primary ('(' args+=arguments ')')* # callExpr;
+
+primary 
+    locals [Typespec type = null, Object value = null, SymTableEntry entry = null]    
+    : 'true'                     # primaryTrue
+    | 'false'                    # primaryFalse
+    | 'none'                     # primaryNone
+    | num=INTEGER                # primaryInteger
+    | num=REAL                   # primaryReal
+    | str=STRING                 # primaryString
+    | id=IDENTIFIER              # primaryIdentifier
+    | '(' inner=expression ')'   # primaryParenthesis
+    ;
+
+arguments
+    :                                          # noargs
+    | first=expression (',' rest+=expression)* # argumentList;
+
+INTEGER    : DIGIT+ ;
+REAL       : DIGIT+ '.' DIGIT+ ;
+STRING     : '"' ~('"')* '"' ;
+IDENTIFIER : ALPHA (ALPHA | DIGIT)* ;
+ALPHA      : [a-zA-Z_] ;
+DIGIT      : [0-9] ;
+
+COMMENT : '#' ~('\r' | '\n')* -> skip ;
+WS      : [ \t\r\n]+ -> skip ;
