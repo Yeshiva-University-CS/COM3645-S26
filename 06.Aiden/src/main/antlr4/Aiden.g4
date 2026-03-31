@@ -29,10 +29,6 @@ functionBody
     | block            # blockBody
     ;
 
-varDecl 
-    locals [SymTableEntry entry = null]
-    : 'var' id=IDENTIFIER ('=' init=expression)? ';' # variableDeclaration;
-
 // Statements
 
 statement
