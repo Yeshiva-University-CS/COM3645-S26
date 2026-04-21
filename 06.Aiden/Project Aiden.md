@@ -84,13 +84,13 @@ Refer to the *Aiden Language Summary* for full language specifications.
 
 ---
 
-## B. Executor (30 points)
+## B. Executor (25 points)
 
 Implement the Executor classes in the back end to run your Aiden code.
 
 ---
 
-## C. Converter (30 points)
+## C. Converter (25 points)
 
 Implement the Converter classes in the back end to convert your code into Java or any other language.
 
@@ -99,7 +99,7 @@ Implement the Converter classes in the back end to convert your code into Java o
 
 ---
 
-## D. Optimizations, Language Features, and Constructs
+## D. Optimizations, Language Features, and Constructs (30 points)
 
 (Combined: 30 points)
 
