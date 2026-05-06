@@ -13,9 +13,16 @@ public class TACCodeGenerator extends CodeGenerator {
     private String indent = "";
     private String programLabel = "";
     private StringBuilder output = new StringBuilder();
+    private final String programName;
 
     public TACCodeGenerator(TupleIR ir) {
         super(ir);
+        this.programName = "";
+    }
+
+    public TACCodeGenerator(TupleIR ir, String programName) {
+        super(ir);
+        this.programName = programName;
     }
 
     private void indent() {
@@ -68,7 +75,9 @@ public class TACCodeGenerator extends CodeGenerator {
     @Override
     public void emitFunctionStart(Tuple functionTuple, FunctionInfo info) {
         // Emit the function label
-        String functionLabel = functionTuple.getOperands().get(0).toString();
+        String functionLabel = (!programName.isEmpty() && info.isGlobalLevel())
+                ? programName
+                : functionTuple.getOperands().get(0).toString();
         emit(functionLabel + ":");
 
         indent();
@@ -92,7 +101,7 @@ public class TACCodeGenerator extends CodeGenerator {
 
     @Override
     public void emitProgram(Tuple programTuple) {
-        programLabel = programTuple.getOperands().get(0).toString();
+        programLabel = programName.isEmpty() ? programTuple.getOperands().get(0).toString() : programName;
     }
 
     @Override

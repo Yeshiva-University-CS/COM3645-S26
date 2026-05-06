@@ -11,8 +11,10 @@ import org.antlr.v4.runtime.tree.ParseTree;
 
 import antlr4.AidenLexer;
 import antlr4.AidenParser;
-import edu.yu.compilers.backend.compiler.CodeGenerator;
 import edu.yu.compilers.backend.compiler.Compiler;
+import edu.yu.compilers.backend.converter.Converter;
+import edu.yu.compilers.backend.converter.JavaCodeGenerator;
+import edu.yu.compilers.backend.compiler.X86_64CodeGenerator;
 import edu.yu.compilers.backend.compiler.TACCodeGenerator;
 import edu.yu.compilers.backend.irgen.TupleIRBuilder;
 import edu.yu.compilers.frontend.ast.ASTBuilder;
@@ -24,7 +26,7 @@ import edu.yu.compilers.intermediate.ir.TupleIR;
 import edu.yu.compilers.intermediate.ir.TupleIRUtils;
 
 public class Aiden {
-    static boolean compileMode;
+    static boolean silentMode;
 
     public static void main(String[] args) throws Exception {
         if (args.length < 2) {
@@ -54,7 +56,7 @@ public class Aiden {
             return;
         }
 
-        // Handle compile mode specially as it needs an extra argument
+        // Handle compile/convert modes specially as they need an extra argument
         if (mode == Mode.COMPILE) {
             if (args.length != 3) {
                 System.out.println("ERROR: Compile mode requires codegen type and source file.");
@@ -64,7 +66,19 @@ public class Aiden {
             String codegenType = args[1].toLowerCase();
             if (!codegenType.equals("tac") && !codegenType.equals("x86")) {
                 System.out.println("ERROR: Invalid codegen type. Must be either 'tac' or 'x86'");
-                System.out.println("USAGE: Aiden -compile {tac} sourceFileName");
+                System.out.println("USAGE: Aiden -compile {tac|x86} sourceFileName");
+                return;
+            }
+        } else if (mode == Mode.CONVERT) {
+            if (args.length != 3) {
+                System.out.println("ERROR: Convert mode requires converter type and source file.");
+                System.out.println("USAGE: Aiden -convert java sourceFileName");
+                return;
+            }
+            String converterType = args[1].toLowerCase();
+            if (!converterType.equals("java")) {
+                System.out.println("ERROR: Invalid converter type. Must be 'java'");
+                System.out.println("USAGE: Aiden -convert java sourceFileName");
                 return;
             }
         } else if (args.length != 2) {
@@ -72,8 +86,8 @@ public class Aiden {
             return;
         }
 
-        // Get the source file name (it's arg[2] for compile mode, arg[1] for others)
-        String sourceFileName = (mode == Mode.COMPILE) ? args[2] : args[1];
+        // Get the source file name (it's arg[2] for compile/convert mode, arg[1] for others)
+        String sourceFileName = (mode == Mode.COMPILE || mode == Mode.CONVERT) ? args[2] : args[1];
 
         // Create the input stream.
         InputStream source = new FileInputStream(sourceFileName);
@@ -123,7 +137,7 @@ public class Aiden {
             return;
         }
 
-        compileMode = mode == Mode.COMPILE;
+        silentMode = mode == Mode.COMPILE || mode == Mode.CONVERT;
 
         // Pass 2B: Build the AST
         println("\nPASS 2B Build AST IR:");
@@ -154,18 +168,28 @@ public class Aiden {
                 println(String.format("%,.3f seconds total execution time.\n", executor.getElapsedTime() / 1000.0));
             }
             case CONVERT -> {
-                // Pass 3: Convert from Aiden to Java.
-                System.out.println("\nPASS 3 Convert: ");
-                System.out.print("\nTBD:\n\n");
+                String baseName = new java.io.File(sourceFileName).getName();
+                if (baseName.endsWith(".aiden")) {
+                    baseName = baseName.substring(0, baseName.length() - ".aiden".length());
+                }
+                String javaClassName = Character.toUpperCase(baseName.charAt(0)) + baseName.substring(1);
+
+                edu.yu.compilers.backend.converter.CodeGenerator codegen =
+                    new JavaCodeGenerator(program.getEntry(), javaClassName);
+                Converter converter = new Converter(codegen);
+                System.out.println(converter.convert(program));
             }
             case COMPILE -> {
                 // Pass 3: Compile the Aiden program.
-                CodeGenerator codegen = null;
-                if (args[1].equals("tac"))
-                    codegen = new TACCodeGenerator(ir);
-                else
-                    System.out.println("UNSUPPORTED CODEGEN TYPE: " + args[1]);
+                String baseName = new java.io.File(sourceFileName).getName();
+                if (baseName.endsWith(".aiden")) {
+                    baseName = baseName.substring(0, baseName.length() - ".aiden".length());
+                }
+                String programName = Character.toUpperCase(baseName.charAt(0)) + baseName.substring(1);
 
+                edu.yu.compilers.backend.compiler.CodeGenerator codegen = args[1].equals("tac")
+                    ? new TACCodeGenerator(ir, programName)
+                    : new X86_64CodeGenerator(ir, programName);
                 Compiler compiler = new Compiler(codegen);
                 System.out.println(compiler.compile(ir));
             }
@@ -176,12 +200,13 @@ public class Aiden {
     }
 
     private static void printUsage() {
-        System.out.println("USAGE: Aiden {-type | -ast | -ir | -execute | -convert} sourceFileName");
+        System.out.println("USAGE: Aiden {-type | -ast | -ir | -execute} sourceFileName");
+        System.out.println("   OR: Aiden -convert java sourceFileName");
         System.out.println("   OR: Aiden -compile {tac|x86} sourceFileName");
     }
 
     private static void println(String str) {
-        if (!compileMode)
+        if (!silentMode)
             System.out.println(str);
     }
 }
