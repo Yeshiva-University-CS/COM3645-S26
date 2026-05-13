@@ -57,10 +57,10 @@ public class X86_64CodeGenerator extends CodeGenerator {
      * Class to store information about global variables.
      */
     private static class GlobalVarInfo {
-        private final Operand.OperandType type;
+        private final OperandType type;
         private final Object value;
 
-        public GlobalVarInfo(Operand.OperandType type, Object value) {
+        public GlobalVarInfo(OperandType type, Object value) {
             this.type = type;
             this.value = value;
         }
@@ -98,6 +98,15 @@ public class X86_64CodeGenerator extends CodeGenerator {
     @Override
     public void emitProgramEnd() {
         output = masterOutput;
+
+        // Pre-register string constants from global variables so their labels
+        // are allocated before the .rodata section is emitted below.
+        for (Map.Entry<String, GlobalVarInfo> entry : globalVariables.entrySet()) {
+            GlobalVarInfo info = entry.getValue();
+            if (info.type == OperandType.STRING && info.value instanceof String strValue) {
+                addStringConstant(strValue);
+            }
+        }
 
         // 1. Emit the .rodata section with string constants
         if (!stringConstants.isEmpty()) {
@@ -148,7 +157,7 @@ public class X86_64CodeGenerator extends CodeGenerator {
         for (Map.Entry<String, GlobalVarInfo> entry : globalVariables.entrySet()) {
             String varName = entry.getKey();
             GlobalVarInfo info = entry.getValue();
-            Operand.OperandType type = info.type;
+            OperandType type = info.type;
             Object value = info.value;
 
             switch (type) {
@@ -202,7 +211,7 @@ public class X86_64CodeGenerator extends CodeGenerator {
                     if (value instanceof String strValue) {
                         String stringLabel = addStringConstant(strValue);
                         // We need to use the address of the string constant
-                        emitIndented(".quad " + stringLabel + "(%rip)"); // 64-bit pointer to the string constant
+                        emitIndented(".quad " + stringLabel); // 64-bit pointer to the string constant
                     } else {
                         emitIndented(".quad 0"); // 64-bit pointer initialized to null (0)
                     }
@@ -406,7 +415,20 @@ public class X86_64CodeGenerator extends CodeGenerator {
 
     @Override
     protected void emitSub(Tuple tuple) {
-        emitBinaryOp(tuple, X86_64Instruction.SUBQ, X86_64Instruction.SUBSD);
+        List<Operand> ops = tuple.getOperands();
+        if (ops.size() == 2) {
+            // Unary negation: negate the single operand in place
+            Operand result = ops.get(0);
+            Operand operand = ops.get(1);
+            String operandRef = getOperandReference(operand);
+            String resultRef = getOperandReference(result);
+            X86_64Operand raxReg = new Register(X86_64Register.RAX);
+            emitAssembly(X86_64Instruction.MOVQ, new Memory(operandRef), raxReg);
+            emitAssembly(X86_64Instruction.NEGQ, raxReg);
+            emitAssembly(X86_64Instruction.MOVQ, raxReg, new Memory(resultRef));
+        } else {
+            emitBinaryOp(tuple, X86_64Instruction.SUBQ, X86_64Instruction.SUBSD);
+        }
     }
 
     @Override
@@ -719,6 +741,18 @@ public class X86_64CodeGenerator extends CodeGenerator {
         // Only set the return value if there is one
         if (!tuple.getOperands().isEmpty()) {
             Operand returnValue = tuple.getOperands().get(0);
+
+            // Returning a function as a value: load its address via GOT
+            if (returnValue instanceof Function func) {
+                X86_64Operand raxReg = new Register(X86_64Register.RAX);
+                // Use Memory (no * prefix) since this is a MOVQ not CALL
+                X86_64Operand funcPtr = new Memory(func.getName() + "@GOTPCREL(%rip)");
+                emitAssembly(X86_64Instruction.MOVQ, funcPtr, raxReg);
+                X86_64Operand epilogueLabel = new X86_64Operand.Label(currentFunction + "_epilogue");
+                emitAssembly(X86_64Instruction.JMP, epilogueLabel);
+                return;
+            }
+
             String returnRef = getOperandReference(returnValue);
 
             // Check if the return value is a floating point value
@@ -863,13 +897,22 @@ public class X86_64CodeGenerator extends CodeGenerator {
         }
 
         // Call the function
-        // Get the function name from the function operand
-        Function function = (Function) ops.get(1);
-        String funcName = function.getName();
-
-        // Call the function using the base name
-        X86_64Operand funcCall = new X86_64Operand.Symbol(funcName);
-        emitAssembly(X86_64Instruction.CALL, funcCall);
+        Operand funcOperand = ops.get(1);
+        X86_64Operand raxRegCall = new Register(X86_64Register.RAX);
+        if (funcOperand instanceof Function function) {
+            // Direct named call
+            String funcName = function.getName();
+            X86_64Operand funcCall = new X86_64Operand.Symbol(funcName + "@GOTPCREL(%rip)");
+            emitAssembly(X86_64Instruction.CALL, funcCall);
+        } else {
+            // Indirect call through a variable holding a function pointer
+            String varRef = getOperandReference(funcOperand);
+            X86_64Operand varMem = new Memory(varRef);
+            emitAssembly(X86_64Instruction.MOVQ, varMem, raxRegCall);
+            // Symbol prepends '*', so Symbol("%rax") → call *%rax (indirect call)
+            X86_64Operand indirectCall = new X86_64Operand.Symbol("%rax");
+            emitAssembly(X86_64Instruction.CALL, indirectCall);
+        }
 
         // Clean up stack if we pushed arguments
         if (ops.size() > 8) {
@@ -969,7 +1012,7 @@ public class X86_64CodeGenerator extends CodeGenerator {
      * Generate a unique label for string constants.
      */
     private String generateStringLabel() {
-        return ".LCS" + (stringCounter++);
+        return "__str_" + (stringCounter++);
     }
 
     // Removed unused generateLabel method
@@ -1075,13 +1118,13 @@ public class X86_64CodeGenerator extends CodeGenerator {
                     String varName = "__const_" + globalVariables.size();
 
                     // Add to the map of global variables with its type and value
-                    Operand.OperandType type;
+                    OperandType type;
                     if (value instanceof String) {
-                        type = Operand.OperandType.STRING;
+                        type = OperandType.STRING;
                     } else if (value instanceof Float || value instanceof Double) {
-                        type = Operand.OperandType.FLOAT;
+                        type = OperandType.FLOAT;
                     } else {
-                        type = Operand.OperandType.INTEGER;
+                        type = OperandType.INTEGER;
                     }
 
                     globalVariables.put(varName, new GlobalVarInfo(type, value));
