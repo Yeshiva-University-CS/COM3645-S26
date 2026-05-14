@@ -18,6 +18,7 @@ public enum X86_64Instruction {
     ADDQ("addq"),
 
     // Arithmetic Operations
+    NEGQ("negq"),
     IMULQ("imulq"),
     IDIVQ("idivq"),
     MULSD("mulsd"),
